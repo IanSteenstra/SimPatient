@@ -1,0 +1,73 @@
+    **Instructions:**
+        Carefully read the provided therapist utterance.
+        Consider the context of the session and the target change.
+        Choose the single most appropriate MITI 4.2.1 code that best describes the therapist's utterance.
+        If uncertain, refer to the decision rules in the coding manual and the provided examples.
+        
+        **MITI 4.2.1 Codes:**
+        - ** Giving Information (GI): Providing neutral information without attempting to persuade.
+        - ** Persuade: Overt attempts to change the client's opinion, attitudes, or behavior using logic, arguments, or facts without emphasizing client autonomy.
+        - ** Persuade with Permission: Persuading while emphasizing collaboration or autonomy support and seeking explicit or implicit permission.
+        - ** Question (Q): Any question asked by the therapist (open or closed).
+        - ** Simple Reflection (SR): Reflecting client statements without adding meaning or emphasis.
+        - ** Complex Reflection (CR): Adding substantial meaning or emphasis to client statements.
+        - ** Affirm (AF): Accentuating something positive about the client, specifically about their strengths, efforts, intentions, or worth.
+        - ** Seeking Collaboration (Seek): Explicitly attempting to share power, acknowledge client expertise, or seek consensus.
+        - ** Emphasizing Autonomy (Emphasize): Highlighting client control, freedom of choice, or responsibility for decisions.
+        - ** Confront: Directly disagreeing, arguing, correcting, shaming, blaming, criticizing, warning, or questioning client honesty.
+        
+        Few-shot Learning Examples:
+        1. Giving Information (GI):
+        "Methamphetamine can cause serious damage to your teeth and gums, often leading to what's called 'meth mouth'." (Target Change: Methamphetamine Use)
+        "There are medications, like buprenorphine and methadone, that can help manage opioid withdrawal symptoms and reduce cravings." (Target Change: Opioid Use)
+        "Combining alcohol with benzodiazepines can be extremely dangerous and even fatal due to respiratory depression." (Target Change: Polysubstance Use)
+        
+        2. Persuade:
+        "You're playing Russian roulette with your life every time you inject heroin. You need to stop before it's too late." (Target Change: Heroin Use)
+        "You're just wasting your life away by smoking crack. You need to get your act together and quit." (Target Change: Crack Cocaine Use)
+        "Look at what you're doing to your body with all this cocaine. You're going to have a heart attack if you don't stop." (Target Change: Cocaine Use)
+        
+        3. Persuade with Permission:
+        "I know you're struggling with your marijuana use, and I have some ideas about strategies that have helped others reduce their consumption. Would you be open to discussing them?" (Target Change: Marijuana Use)
+        "Many people find that attending a support group, like Narcotics Anonymous, can be helpful in their recovery from opioid addiction. What are your thoughts on exploring that option?" (Target Change: Opioid Use)
+        "From my experience, people who are trying to quit using stimulants often find that managing their stress is essential. May I share some techniques that might be helpful for you?" (Target Change: Stimulant Use)
+        
+        4. Question (Q):
+        "What are some of the things you enjoy about using methamphetamine?" (Target Change: Methamphetamine Use)
+        "What are your biggest concerns about the impact of your opioid use on your life?" (Target Change: Opioid Use)
+        "How would you like your relationship with drugs and alcohol to be different in the future?" (Target Change: Polysubstance Use)
+        
+        5. Simple Reflection (SR):
+        "It sounds like you're feeling overwhelmed by the challenges of quitting heroin." (Target Change: Heroin Use)
+        "You're feeling ambivalent about giving up marijuana because it helps you relax." (Target Change: Marijuana Use)
+        "You're worried about the withdrawal symptoms you might experience if you stop using cocaine." (Target Change: Cocaine Use)
+        
+        6. Complex Reflection (CR):
+        "You're torn between wanting to continue using cocaine for the energy and confidence it gives you, but you're also concerned about the negative consequences it's having on your health and your relationships." (Target Change: Cocaine Use)
+        "You feel like marijuana is a part of your identity and your social life, but you're starting to question whether it's really serving you anymore." (Target Change: Marijuana Use)
+        "You want to be free from the grip of opioid addiction, but you're afraid of the pain and discomfort of withdrawal." (Target Change: Opioid Use)
+        
+        7. Affirm (AF):
+        "It takes a lot of strength to admit that you're struggling with methamphetamine addiction. I commend you for taking that step." (Target Change: Methamphetamine Use)
+        "I'm really impressed with your commitment to staying sober from opioids, especially with all the triggers you've been facing lately." (Target Change: Opioid Use)
+        "You have a lot of positive qualities and strengths that will be valuable in your recovery journey." (Target Change: Polysubstance Use)
+        
+        8. Seeking Collaboration (Seek):
+        "I have some information about the risks of sharing needles, and I wonder if it would be helpful for me to share it with you." (Target Change: Injection Drug Use)
+        "What are your thoughts about developing a relapse prevention plan that might help you stay sober from cocaine?" (Target Change: Cocaine Use)
+        "I'm curious to hear your perspective on what kind of support system would be most beneficial for you as you navigate your recovery from benzodiazepine dependence." (Target Change: Benzodiazepine Use)
+        
+        9. Emphasizing Autonomy (Emphasize):
+        "You have the power to make choices about your drug use, and I trust you to make decisions that are right for you." (Target Change: Polysubstance Use)
+        "Only you can decide when you're ready to make a change with your marijuana use. I'm here to support you whenever that may be." (Target Change: Marijuana Use)
+        "Your recovery from opioid addiction is a personal journey, and I respect your right to choose the path that works best for you." (Target Change: Opioid Use)
+        
+        10. Confront:
+        "You're lying to yourself and to me about how much you're smoking crack." (Target Change: Crack Cocaine Use)
+        "You need to stop blaming everyone else for your addiction to heroin and take some responsibility for your own actions." (Target Change: Heroin Use)
+        "You can't just keep popping pills and expect everything to be okay. You need to get a handle on your benzodiazepine use." (Target Change: Benzodiazepine Use)
+        
+        11. None:
+        "So, let's take a look at the homework sheet you completed this week. How did it go with tracking your cravings?"
+        "Hi Sarah, thanks for coming in today. How was your weekend?"
+        "You mentioned that you were feeling..."
