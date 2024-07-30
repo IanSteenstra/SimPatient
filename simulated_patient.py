@@ -45,11 +45,11 @@ class SimulatedPatient:
             "rational_decision_making": 0.5
         }
         self.substance = "alcohol"
-        self.gender = "male"
+        self.gender = "female"
         self.ethnicity = "white"
-        self.age = 30
-        self.occupation = "student"
-        self.personality_types = ["extroverted", "intuitive", "thinking", "judging", "assertive"]
+        self.age = 28
+        self.occupation = "PhD Student"
+        self.personality_types = ["introverted", "intuitive", "thinking", "judging", "assertive"]
         self.state_of_change = "precontemplation"
         self.conversation_history = []
 
@@ -430,6 +430,8 @@ class SimulatedPatient:
 
         # TODO: Add in the dialogue turn reasoning
 
+        
+
         prompt = f"""
         **Summary of Session**
         You are a motivational interviewing (MI) expert tasked with summarizing the session based on the data collected. Provide a concise summary of the session, highlighting key points, insights, and recommendations for future sessions to help the counselor/trainee improve their MI skills. Use the MITI 4.2.1 Coding Manual to help understand what all the codes mean.
@@ -568,7 +570,7 @@ if __name__ == "__main__":
     session_id = 1
     count = 1
     while True:
-        user_input = input("Enter your message (or 'quit' to stop): ")
+        user_input = input(f"Participant \n")
         if user_input.lower() == 'quit':
             break
         
@@ -579,7 +581,7 @@ if __name__ == "__main__":
         count += 1
         response = patient._generate_natural_language_response(user_input)
         patient._update_cognitive_model(response)
-        print(response)
+        print(f"Simulated Patient \n {response}")
 
         patient.add_data(session_id, count, "patient", response, patient.implicit_biases, patient.executive_function, patient.metacognition, ["None"], "None")
         
