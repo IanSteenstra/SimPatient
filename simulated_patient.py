@@ -1,8 +1,8 @@
-import json
 import pandas as pd
 import openai
 import json.decoder
 import os
+import random
 
 from collections import Counter
 from itertools import chain
@@ -14,184 +14,185 @@ if not API_KEY:
 
 openai.api_key = API_KEY
 
-columns = ['session_id', 'dialogue_turn', 'speaker', 'text_response', 'patient_implicit_biases', 'patient_executive_function', 'patient_metacognition', 'miti_behavior_codes', 'reasoning']
-full_data_frame = pd.DataFrame(columns=columns)
-summary_columns = ['session_id', 'summary']
-summary_data_frame = pd.DataFrame(columns=summary_columns)
+# conversation_history database schema
+conversation_history_columns = [
+    "user_id",
+    "persona_id",
+    "session_id",
+    "dialogue_turn",
+    "speaker",
+    "text_response",
+    "patient_control",
+    "patient_efficacy",
+    "patient_awareness",
+    "patient_reward",
+    "miti_behavior_codes",
+    "miti_behavior_reasoning"
+]
+
+conversation_history_df = pd.DataFrame(columns=conversation_history_columns)
+
+# eval_summary database schema
+eval_summary_columns = [
+    "user_id",
+    "session_id",
+    "summary",
+    "gi_count",
+    "persuade_count",
+    "persuade_with_count",
+    "q_count",
+    "sr_count",
+    "cr_count",
+    "af_count",
+    "seek_count",
+    "emphasize_count",
+    "confront_count",
+    "empathy_score",
+    "partnership_score",
+    "cultivating_change_talk_score",
+    "softening_sustain_talk_score",
+    "technical_global_score",
+    "relational_global_score",
+    "mi_adherence_percentage",
+    "mi_non_adherence_percentage"
+]
+
+eval_summary_df = pd.DataFrame(columns=eval_summary_columns)
+
+between_session_event_columns = [
+    "user_id",
+    "persona_id",
+    "session_id",
+    "event_description"
+]
+
+between_session_event_df = pd.DataFrame(columns=between_session_event_columns)
+
+# persona_characteristics database schema
+persona_characteristics_columns = [
+    "persona_id",
+    "age",
+    "gender",
+    "occupation",
+    "ethnicity",
+    "MBTI"
+]
+
+persona_characteristics_df = pd.DataFrame(columns=persona_characteristics_columns)
+
+# Example: Adding a row to the persona_characteristics DataFrame
+example_persona_characteristics_row = {
+    "persona_id": "1",
+    "age": 30,
+    "gender": "Female",
+    "occupation": "Teacher",
+    "ethnicity": "Hispanic",
+    "MBTI": "INFJ-A"
+}
+
+# Convert the row to a DataFrame
+example_persona_characteristics_df = pd.DataFrame([example_persona_characteristics_row])
+
+# Append the example row to the persona_characteristics DataFrame
+persona_characteristics_df = pd.concat([persona_characteristics_df, example_persona_characteristics_df], ignore_index=True)
 
 behavior_codes_keys = ["GI", "Persuade", "Persuade with", "Q", "SR", "CR", "AF", "Seek", "Emphasize", "Confront"]
-
-max_tokens = 4096
+non_verbal_cues = ['<gaze dir="AWAY"/>', '<gaze dir="TOWARDS"/>', '<expression type="SMILE"/>', '<expression type="NEUTRAL"/>', '<expression type="CONCERN"/>', '<eyebrows dir="UP"/>', '<eyebrows dir="DOWN"/>', '<eyebrows dir="NEUTRAL"/>', '<flush/>', '<gesture hand="L" cmd="THUMBS_UP"/>', '<gesture hand="L" cmd="WAVE"/>', '<greet/>', '<headbob/>', '<headnod/>', '<idle/>', '<posture/>']
 
 class SimulatedPatient:
-    def __init__(self):
+    def __init__(self, user_id, persona_id, session_id):
+        self.conversation_history_df = conversation_history_df
+        self.eval_summary_df = eval_summary_df
+        self.between_session_event_df = between_session_event_df
+        self.persona_characteristics_df = persona_characteristics_df
+        self.non_verbal_cues = non_verbal_cues
+
         self.llm = openai
-        self.implicit_biases = {
-            "memory": [],
-            "attention": [],
-            "approach": [],
-            "habit": [],
-            "salience": []
-        }
-        self.executive_function = {
-            "inhibitory_control": 0.5,
-            "self_control": 0.5,
-            "decision_making": 0.5,
-            "working_memory": 0.5
-        }
-        self.metacognition = {
-            "insight": 0.5,
-            "self_reflection": 0.5,
-            "rational_decision_making": 0.5
-        }
-        self.substance = "alcohol"
-        self.gender = "female"
-        self.ethnicity = "white"
-        self.age = 28
-        self.occupation = "PhD Student"
-        self.personality_types = ["introverted", "intuitive", "thinking", "judging", "assertive"]
-        self.state_of_change = "precontemplation"
-        self.conversation_history = []
 
-        file_path = 'miti4_2.txt'
+        self.persona_id = persona_id
+        self.persona = self.get_persona_characteristics()
 
-        # Open the file in read mode ('r') and read its contents into a string variable
-        with open(file_path, 'r', encoding='iso-8859-1') as file:
+        self.age = self.persona["age"]
+        self.gender = self.persona["gender"]
+        self.occupation = self.persona["occupation"]
+        self.ethnicity = self.persona["ethnicity"]
+        self.mbti = self.persona["MBTI"]
+
+        mi_file_path = 'miti4_2.txt'
+        with open(mi_file_path, 'r', encoding='iso-8859-1') as file:
             self.miti_manual = file.read()
 
-    def _update_cognitive_model(self, response_text):
-        # print(f"Current Cognitive Model: {self.implicit_biases}, {self.executive_function}, {self.metacognition}") 
+        self.user_id = user_id
+        self.session_id = session_id
 
-        # Update cognitive model based on the response
-        prompt = f"""You are evaluating the current cognitive state of a simulated patient struggling with {self.substance}. Based on the patient's responses to the therapist, update the cognitive model with the relevant biases and cognitive abilities that are demonstrated in the conversation.
-        
-        **Cognitive Model Explanations:**
+        self.session_history = []
+        self.dialogue_turn = 1
 
-        * **Implicit Biases:** These are unconscious, automatic associations and reactions related to {self.substance}. They influence your thoughts, feelings, and behaviors without you consciously realizing it. 
-            - **Memory:** What you remember easily (or with difficulty) about past experiences with {self.substance}.
-            - **Attention:** What you notice (or fail to notice) related to {self.substance} in your environment.
-            - **Approach/Avoidance:** Your automatic urge to approach or avoid {self.substance} or related cues.
-            - **Habit:** Ingrained, automatic behavioral patterns related to {self.substance} use.
-            - **Salience:** How much importance or noticeability you give to {self.substance} related cues.
-            - **Example:** If you have a memory bias towards remembering positive drinking experiences, you might say: "I know drinking is a problem, but I can't help but think about how much fun I used to have with my friends at the bar."
+        self.patient_control = None
+        self.patient_efficacy = None
+        self.patient_awareness = None
+        self.patient_reward = None
+        self.retrieve_patient_data()
+    
+    def get_persona_characteristics(self):
+        return self.persona_characteristics_df[self.persona_characteristics_df["persona_id"] == self.persona_id]
 
-        * **Executive Function:** These are higher-level cognitive abilities that help you control impulses, make decisions, and regulate your behavior.
-            - **Inhibitory Control:** Your ability to resist urges and impulses.
-            - **Self-Control:** Your ability to manage your actions and emotions.
-            - **Decision Making:** Your ability to weigh options and make choices, especially in relation to {self.substance}.
-            - **Working Memory:** Your ability to hold and process information in mind, which is important for remembering goals and resisting cravings.
-            - **Example:** If you have low inhibitory control, you might give in to a craving more easily: "I know I shouldn't, but one drink won't hurt, right?"
+    def retrieve_patient_data(self):
+        # Filter the DataFrame for rows with the same user_id and persona_id
 
-        * **Metacognition:** This is your ability to think about your own thinking. It involves self-awareness, reflection, and understanding your own mental processes.
-            - **Insight:** Your awareness of your addiction and its impact on yourself and others. 
-            - **Self-Reflection:** Your ability to analyze your thoughts, feelings, and behaviors related to {self.substance}.
-            - **Rational Decision Making:** Your ability to make logical and well-considered choices, especially about {self.substance} use.
-            - **Example:** If you have low insight, you might deny the severity of your problem: "I don't have a drinking problem. I can quit anytime I want."
+        if (conversation_history_df.empty):
+            # Randomly initialize the patient variables
+            self.patient_control = random.randint(1, 10)
+            self.patient_efficacy = random.randint(1, 10)
+            self.patient_awareness = random.randint(1, 10)
+            self.patient_reward = random.randint(1, 10)
+
+        else:
+            filtered_df = conversation_history_df[
+                (conversation_history_df['user_id'] == self.user_id) &
+                (conversation_history_df['persona_id'] == self.persona_id)
+            ]
+
+            if not filtered_df.empty:
+                # Sort by session_id and dialogue_turn to get the latest entry
+                latest_entry = filtered_df.sort_values(
+                    by=['session_id', 'dialogue_turn'],
+                    ascending=[False, False]
+                ).iloc[0]
+
+                # Retrieve and set the patient variables
+                self.patient_control = latest_entry['patient_control']
+                self.patient_efficacy = latest_entry['patient_efficacy']
+                self.patient_awareness = latest_entry['patient_awareness']
+                self.patient_reward = latest_entry['patient_reward']
             
-        Here's the conversation so far:
-        {self.conversation_history}
+            else:
+                # Randomly initialize the patient variables
+                self.patient_control = random.randint(1, 10)
+                self.patient_efficacy = random.randint(1, 10)
+                self.patient_awareness = random.randint(1, 10)
+                self.patient_reward = random.randint(1, 10)
 
-        Latest Therapist Response: {user_input}
-        Latest Simulated Patient Response: {response_text}
+    def generate_dialogue(self, user_input):
+        # TODO: Provide example sentences for each persona attribute to help the LLM understand the context better
 
-        **Current Cognitive Model State:**
-        {{
-            "implicit_biases": {json.dumps(self.implicit_biases)},
-            "executive_function": {json.dumps(self.executive_function)},
-            "metacognition": {json.dumps(self.metacognition)}
-        }}
-
-        Output:
-        {{
-            "implicit_biases": <insert updated states>,
-            "executive_function": <insert updated states>,
-            "metacognition": <insert updated states>
-        }}
-
-        Just provide a JSON formatted response of the updated states for each category based on the conversation without any additional context or explanation. Do not respond with anything outside of the parent brackets, like "json", "output", etc. Your response should be able to be read as JSON without any additional processing.
-        """
-
-        response = self.llm.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": "You are a helpful assistant."},
-                      {"role": "user", "content": prompt}],
-            temperature=1,
-            max_tokens=256,
-            response_format={ "type": "json_object" }
-        )
-
-        response_text = response.choices[0].message.content
-
-        # Parse the JSON 
-        try:
-            updated_states = json.loads(response_text) 
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
-            print(f"Raw response text: {response_text}")
-            # Handle the error appropriately (e.g., exit, use default values)
-
-        # Update the cognitive model
-        self.implicit_biases.update(updated_states["implicit_biases"])
-        self.executive_function.update(updated_states["executive_function"])
-        self.metacognition.update(updated_states["metacognition"])
-
-        # print(f"Updated Cognitive Model: {self.implicit_biases}, {self.executive_function}, {self.metacognition}") 
-
-        # Ensure values stay within 0-1 range
-        self.executive_function = {k: max(0, min(v, 1)) for k, v in self.executive_function.items()}
-        self.metacognition = {k: max(0, min(v, 1)) for k, v in self.metacognition.items()}
-
-    def _generate_natural_language_response(self, user_input):
-        prompt = f"""You are simulating a patient struggling with {self.substance} addiction, interacting with a therapist.  Your responses should reflect the underlying cognitive processes of this individual, without explicitly mentioning these processes or numerical scores. Also, subtly reflect the persona attributes of the patient in your responses, as well as their current state of behavior change.
+        prompt = f"""You are simulating a patient struggling with alcohol addiction, interacting with a therapist. Your responses should reflect the underlying cognitive processes of this individual, without explicitly mentioning these processes or numerical scores. Also, subtly personify the persona attributes/characteristics of the patient in your responses without explicitly stating them to the therapist.
+        
         **Persona Attributes:**
         - ** Gender: {self.gender}
         - ** Ethnicity: {self.ethnicity}
         - ** Age: {self.age}
         - ** Occupation: {self.occupation}
-        - ** Personality Types: {self.personality_types}
-        - ** State of Change: {self.state_of_change}
-
-        **Stages of Change:**
-        - ** Precontemplation - (Not yet acknowledging that there is a problem behavior that needs to be changed)
-        - ** Contemplation - (Acknowledging that there is a problem but not yet ready, sure of wanting, or lacks confidence to make a change)
-        - ** Preparation - (Getting ready to change)
-        - ** Action -(Changing behavior)
-        - ** Maintenance - (Maintaining the behavior change)
-        
-        **Cognitive Model:**
-
-        * **Implicit Biases:** These are unconscious, automatic associations and reactions related to {self.substance}. They influence your thoughts, feelings, and behaviors without you consciously realizing it. 
-            - **Memory:** What you remember easily (or with difficulty) about past experiences with {self.substance}.
-            - **Attention:** What you notice (or fail to notice) related to {self.substance} in your environment.
-            - **Approach/Avoidance:** Your automatic urge to approach or avoid {self.substance} or related cues.
-            - **Habit:** Ingrained, automatic behavioral patterns related to {self.substance} use.
-            - **Salience:** How much importance or noticeability you give to {self.substance} related cues.
-            - **Example:** If you have a memory bias towards remembering positive drinking experiences, you might say: "I know drinking is a problem, but I can't help but think about how much fun I used to have with my friends at the bar."
-
-        * **Executive Function:** These are higher-level cognitive abilities that help you control impulses, make decisions, and regulate your behavior.
-            - **Inhibitory Control:** Your ability to resist urges and impulses.
-            - **Self-Control:** Your ability to manage your actions and emotions.
-            - **Decision Making:** Your ability to weigh options and make choices, especially in relation to {self.substance}.
-            - **Working Memory:** Your ability to hold and process information in mind, which is important for remembering goals and resisting cravings.
-            - **Example:** If you have low inhibitory control, you might give in to a craving more easily: "I know I shouldn't, but one drink won't hurt, right?"
-
-        * **Metacognition:** This is your ability to think about your own thinking. It involves self-awareness, reflection, and understanding your own mental processes.
-            - **Insight:** Your awareness of your addiction and its impact on yourself and others. 
-            - **Self-Reflection:** Your ability to analyze your thoughts, feelings, and behaviors related to {self.substance}.
-            - **Rational Decision Making:** Your ability to make logical and well-considered choices, especially about {self.substance} use.
-            - **Example:** If you have low insight, you might deny the severity of your problem: "I don't have a drinking problem. I can quit anytime I want."
-
-        **Your Current Cognitive State:**
-
-        * **Implicit Biases:** {self.implicit_biases}
-        * **Executive Function:** {self.executive_function}
-        * **Metacognition:** {self.metacognition}
-
-        **Respond to the therapist naturally, reflecting your cognitive state, persona attributes and state of change. Your responses should subtly demonstrate the influences of your biases and cognitive abilities without explicitly stating them. For instance, DO NOT say that you are are a extravert or introvert. Your response should be able to portray that without explicitly stating it.**
-
-        For example, if your implicit biases make you recall positive memories, your response might emphasize those positive feelings. If your working memory is low, you might forget details or have trouble sticking to a plan.  If you have low insight, you might downplay the severity of your addiction.
-        Respond with just your message.
-
+        - ** MBTI Personality Type: {self.mbti}
+        - ** Control Level: {self.patient_control}
+            - Explanation: Your level of ability to regulate your own thoughts, emotions, and actions (1-10 scale). 
+        - ** Self-Efficacy Level: {self.patient_efficacy}
+            - Explanation: Your level of confidence in your ability to resist cravings, cope with triggers, and achieve your recovery goals. (1-10 scale)
+        - ** Awareness Level: {self.patient_awareness}
+            - Explanation: Your level of ability to accurately perceive and evaluate your own thoughts, feelings, and behaviors. (1-10 scale)
+        - ** Reward Level: {self.patient_reward}
+            - Explanation: The level in which alcohol and its cues trigger cravings and automatic behaviors in you. (1-10 scale)
+            
         **Additionally, you may include in-line non-verbal cues in your response to subtly reflect your cognitive state. They should be in the format of < >. For example, you might say "I'm fine" while avoiding eye contact via including <gaze dir="AWAY" />, indicating that you are not fine. Below are some examples of non-verbal cues you can use:
         - ** Gaze: <gaze dir="AWAY"/>, <gaze dir="TOWARDS"/>
         - ** Expression: <expression type="SMILE"/>, <expression type="NEUTRAL"/>, <expression type="CONCERN"/>
@@ -204,8 +205,12 @@ class SimulatedPatient:
         - ** Idle: <idle/>
         - ** Posture: <posture/>
 
+        You can only use the following in-line non-verbal cues in your response exactly without any modifications. You can use multiple cues in a single response though, but don't overuse them: {self.non_verbal_cues}
+
         Here's the conversation so far:
-        {self.conversation_history}
+        {self.session_history}
+
+        Respond to the therapist naturally with just your message.
 
         Therapist: {user_input}
         You: 
@@ -213,73 +218,33 @@ class SimulatedPatient:
 
         response = self.llm.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "system", "content": "You are a helpful assistant."},
+            messages=[{"role": "system", "content": "You are a simulated alcohol patient talking with a therapist."},
                       {"role": "user", "content": prompt}],
             temperature=1,
-            max_tokens=256
+            max_tokens=100
         )
 
         response_text = response.choices[0].message.content
-
-        # Update conversation history
-        self.conversation_history.append({"role": "user", "content": user_input})
-        self.conversation_history.append({"role": "agent", "content": response_text})
 
         return response_text
     
-    def _generate_temp_evaluation_metrics(self, user_input):
-        # TODO: Use COT prompting to break down into volleys, then evaluate each volley
-        
-        prompt = f"""
-        **Motivational Interviewing Behavior Code Classification**
-        You are a motivational interviewing (MI) expert tasked with classifying therapist volley based on the Motivational Interviewing Treatment Integrity (MITI) 4.2.1 coding manual.
-        
-    
-        Using the attached text from the MITI 4.2.1 coding manual, classify the following therapist volley by behavior codes and your reasoning. Pay specific attention to the rules for which choosing the behavior codes.
-        You must pick the behavior codes from the following list: {behavior_codes_keys}. You also must generate a response in a JSON format with the following structure:
-        {{
-            "behavior_codes": ["Behavior Code 1", "Behavior Code 2", ...],
-            "reasoning": "Your reasoning for choosing the behavior codes."
-        }}
-
-        Therapist Utterance: {user_input}
-        
-        **MITI 4.2.1 Coding Manual:**
-        {self.miti_manual}
-        """
-
-        response = self.llm.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": "You are a helpful assistant."},
-                      {"role": "user", "content": prompt}],
-            temperature=1,
-            max_tokens=max_tokens,
-            response_format={ "type": "json_object" }
-        )
-
-        response_text = response.choices[0].message.content
-
-        # Parse the JSON 
-        try:
-            response_dict = json.loads(response_text) 
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
-            print(f"Raw response text: {response_text}")
-            # Handle the error appropriately (e.g., exit, use default values)
-
-        return response_dict
-    
-    def _generate_session_summary(self, session_id):
+    def generate_summary(self):
         """
         Generates a summary of the session based on the data collected.
         """
-
-        global full_data_frame
-        global summary_data_frame
         
-        behavior_code_counts = Counter(chain.from_iterable(full_data_frame['miti_behavior_codes']))
+        # Filter the DataFrame based on user_id and session_id
+        filtered_df = conversation_history_df[(conversation_history_df['user_id'] == self.user_id) & 
+                                            (conversation_history_df['session_id'] == self.session_id)]
+        
+        # Extract the miti_behavior_codes column and flatten the list of lists
+        miti_behavior_codes = list(chain.from_iterable(filtered_df['miti_behavior_codes']))
+        
 
-        # Convert the Counter object to a dictionary if needed
+        # Count the occurrences of each behavior code
+        behavior_code_counts = Counter(miti_behavior_codes)
+        
+        # Convert the Counter object to a dictionary
         behavior_code_counts_dict = dict(behavior_code_counts)
         
         if 'CR' in behavior_code_counts_dict:
@@ -314,6 +279,9 @@ class SimulatedPatient:
         
         if 'AF' in behavior_code_counts_dict:
             af_count = behavior_code_counts_dict['AF']
+
+            if af_count > 3: # according to the MITI manual, AF should not exceed 3 in a single session based on a 'soft' limit
+                af_count = 3
         else:
             af_count = 0
 
@@ -372,7 +340,7 @@ class SimulatedPatient:
         }}
 
         **Counseling Transcript:**
-        {self.conversation_history}
+        {self.session_history}
         
         **MITI 4.2.1 Coding Manual:**
         {self.miti_manual}
@@ -383,7 +351,7 @@ class SimulatedPatient:
             messages=[{"role": "system", "content": "You are a helpful assistant."},
                       {"role": "user", "content": prompt}],
             temperature=1,
-            max_tokens=max_tokens,
+            max_tokens=512,
             response_format={ "type": "json_object" }
         )
 
@@ -396,6 +364,7 @@ class SimulatedPatient:
             print(f"Error decoding JSON: {e}")
             print(f"Raw response text: {response_text}")
             # Handle the error appropriately (e.g., exit, use default values)
+            response_dict = {}
         
         if "cultivating_change_talk" in response_dict:
             cultivating_change_talk_score = response_dict["cultivating_change_talk"]["score"]
@@ -428,13 +397,17 @@ class SimulatedPatient:
         technical_global = (cultivating_change_talk_score + softening_sustain_talk_score) / 2
         relational_global = (partnership_score + empathy_score) / 2
 
-        # TODO: Add in the dialogue turn reasoning
-
-        
+        conversation_history_str = ""
+        for i in range(len(self.conversation_history_df)):
+            speaker = self.conversation_history_df.loc[i, "speaker"]
+            utterance = self.conversation_history_df.loc[i, "text_response"]
+            miti_behavior_codes_in_convo = self.conversation_history_df.loc[i, "miti_behavior_codes"]
+            miti_behavior_codes_in_convo_reasoning = self.conversation_history_df.loc[i, "miti_behavior_reasoning"]
+            conversation_history_str += f"{speaker.upper()}: {utterance}; MITI Behavior Codes: {miti_behavior_codes_in_convo}; MITI Behavior Code Reasoning: {miti_behavior_codes_in_convo_reasoning}\n"
 
         prompt = f"""
         **Summary of Session**
-        You are a motivational interviewing (MI) expert tasked with summarizing the session based on the data collected. Provide a concise summary of the session, highlighting key points, insights, and recommendations for future sessions to help the counselor/trainee improve their MI skills. Use the MITI 4.2.1 Coding Manual to help understand what all the codes mean.
+        You are a motivational interviewing (MI) expert tasked with summarizing the session based on the data collected. Provide a concise summary of the session, highlighting key points, insights, and recommendations for future sessions to help the counselor/trainee improve their MI skills. Use the MITI 4.2.1 Coding Manual to help understand what all the codes mean. You do not have to reference the scores below in your summary, but just provide a general overview of the session based off of them and the conversation history.
 
         Below are MI scores for evaluating the effectiveness of the counselor/trainee conducting MI and reasoning behind the scores:
         - **Cultivating Change Talk Score:** {cultivating_change_talk_score}
@@ -469,8 +442,8 @@ class SimulatedPatient:
         **Technical Global Score:** {technical_global}
         **Relational Global Score:** {relational_global}
 
-        **Counseling Transcript:**
-        {self.conversation_history}
+        **Counseling Transcript with Reasoning for MITI Behavior Encoding (User = Therapist/Participant; SimPatient = Simulated Patient):**
+        {self.conversation_history_df}
 
         **MITI 4.2.1 Coding Manual:**
         {self.miti_manual}
@@ -484,109 +457,291 @@ class SimulatedPatient:
             messages=[{"role": "system", "content": "You are a helpful assistant."},
                       {"role": "user", "content": prompt}],
             temperature=1,
-            max_tokens=max_tokens
+            max_tokens=512
         )
 
         response_text = response.choices[0].message.content
 
         # Your dictionary
-        summary_data = {
-            "Overall Summary & Recommendations": response_text,
-            "Data & Stats Summary": { 
-                "Cultivating Change Talk Score": cultivating_change_talk_score,
-                "Softening Sustain Talk Score": softening_sustain_talk_score,
-                "Partnership Score": partnership_score,
-                "Empathy Score": empathy_score,
-                "Cultivating Change Talk Reasoning": cultivating_change_talk_reasoning,
-                "Softening Sustain Talk Reasoning": softening_sustain_talk_reasoning,
-                "Partnership Reasoning": partnership_reasoning,
-                "Empathy Reasoning": empathy_reasoning,
-                "CR Count": cr_count,
-                "SR Count": sr_count,
-                "Q Count": q_count,
-                "GI Count": gi_count,
-                "Persuade Count": persuade_count,
-                "Persuade with Count": persuade_with_count,
-                "AF Count": af_count,
-                "Seek Count": seek_count,
-                "Emphasize Count": emphasize_count,
-                "Confront Count": confront_count,
-                "Percent CR": percent_cr,
-                "Reflect Question Ratio": reflect_question_ratio,
-                "Total MI Adherent": total_mi_adherent,
-                "Total MI Non-Adherent": total_mi_non_adherent,
-                "Technical Global Score": technical_global,
-                "Relational Global Score": relational_global
-            }
+        new_eval_summary_row = {
+            "user_id": self.user_id,
+            "session_id": self.session_id,
+            "summary": response_text,
+            "gi_count": gi_count,
+            "persuade_count": persuade_count,
+            "persuade_with_count": persuade_with_count,
+            "q_count": q_count,
+            "sr_count": sr_count,
+            "cr_count": cr_count,
+            "af_count": af_count,
+            "seek_count": seek_count,
+            "emphasize_count": emphasize_count,
+            "confront_count": confront_count,
+            "empathy_score": empathy_score,
+            "partnership_score": partnership_score,
+            "cultivating_change_talk_score": cultivating_change_talk_score,
+            "softening_sustain_talk_score": softening_sustain_talk_score,
+            "technical_global_score": technical_global,
+            "relational_global_score": relational_global,
+            "mi_adherence_percentage": total_mi_adherent,
+            "mi_non_adherence_percentage": total_mi_non_adherent
         }
 
-        # Convert to JSON string
-        summary_json_string = json.dumps(summary_data, indent=4)
-
-        # Update the summary DataFrame
-        new_row = {
-            'session_id': session_id,
-            'summary': summary_json_string
-        }
-
-        new_row_df = pd.DataFrame([new_row])
-        summary_data_frame = pd.concat([summary_data_frame, new_row_df], ignore_index=True)
-        
-    def add_data(self, session_id, dialogue_turn, speaker, text_response, implicit_biases, executive_function, metacognition, miti_behavior_codes, reasoning):
-        """
-        Adds a new row of data to the DataFrame.
-        """
-        global full_data_frame
-        new_row = {
-            'session_id': session_id,
-            'dialogue_turn': dialogue_turn,
-            'speaker': speaker,
-            'text_response': text_response,
-            'patient_implicit_biases': implicit_biases,
-            'patient_executive_function': executive_function,
-            'patient_metacognition': metacognition,
-            'miti_behavior_codes': miti_behavior_codes,
-            'reasoning': reasoning
-        }
-
-        new_row_df = pd.DataFrame([new_row])
-        full_data_frame = pd.concat([full_data_frame, new_row_df], ignore_index=True)
+        new_eval_summary_row_df = pd.DataFrame([new_eval_summary_row])
+        self.eval_summary_df = pd.concat([self.eval_summary_df, new_eval_summary_row_df], ignore_index=True)
+        return
     
-    def save_full_data_frame(self, filename='full_data_frame.csv'):
-        """
-        Saves the DataFrame to a CSV file.
-        """
-        full_data_frame.to_csv(filename, index=False)
+    def generate_miti_behavior_codes(self, user_input, prev_response_text):        
+        prompt = f"""
+        **Motivational Interviewing Behavior Code Classification**
+        You are a motivational interviewing (MI) expert tasked with classifying therapist volleys and giving a reason for your encoding based on the Motivational Interviewing Treatment Integrity (MITI) 4.2.1 coding manual.
+        
+    
+        Using the attached text from the MITI 4.2.1 coding manual, classify the following therapist volley by behavior codes and give your reasoning. Pay specific attention to the rules for which choosing the behavior codes.
+        You must pick the behavior codes from the following list: {behavior_codes_keys}. You also must generate a response in a JSON format with the following structure:
+        {{
+            "behavior_codes": ["Behavior Code 1", "Behavior Code 2", ...],
+            "reasoning": "Your reasoning for choosing the behavior codes."
+        }}
 
-    def save_summary_data_frame(self, filename='summary_data_frame.csv'):
+        Previous Patient Utterance: {prev_response_text}
+        Therapist Utterance: {user_input}
+        
+        **MITI 4.2.1 Coding Manual:**
+        {self.miti_manual}
         """
-        Saves the Summary DataFrame to a CSV file.
+
+        response = self.llm.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": "You are a helpful assistant."},
+                      {"role": "user", "content": prompt}],
+            temperature=1,
+            max_tokens=256,
+            response_format={ "type": "json_object" }
+        )
+
+        response_text = response.choices[0].message.content
+
+        # Parse the JSON 
+        try:
+            response_dict = json.loads(response_text) 
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            print(f"Raw response text: {response_text}")
+            # Handle the error appropriately (e.g., exit, use default values)
+            return []
+
+        return response_dict
+    def update_persona_attribute(self, user_input, response_text):
+        # TODO: Provide example sentences for each persona attribute to help the LLM understand the context better
+
+        # Update the simulated patient's characteristics based on the response
+        prompt = f"""You are evaluating the current persona characteristics of a simulated patient struggling with alcohol. Based on the patient's responses to the therapist, update the below persona characteristics that are demonstrated in the conversation.
+        
+        **Persona Characteristics Explanations & Current Scores:**
+        - **Current Control Level: {self.patient_control}
+            - Explanation: Your level of ability to regulate your own thoughts, emotions, and actions (1-10 scale).
+        - **Current Self-Efficacy Level: {self.patient_efficacy}
+            - Explanation: Your level of confidence in your ability to resist cravings, cope with triggers, and achieve your recovery goals. (1-10 scale)
+        - **Current Awareness Level: {self.patient_awareness}  
+            - Explanation: Your level of ability to accurately perceive and evaluate your own thoughts, feelings, and behaviors. (1-10 scale)
+        - **Current Reward Level: {self.patient_reward}
+            - Explanation: The level in which alcohol and its cues trigger cravings and automatic behaviors in you. (1-10 scale)
+        
+        Here's the conversation so far:
+        {self.session_history}
+
+        Previous Therapist Utterance: {user_input}
+        Simulated Patient Utterance: {response_text}
+
+        Output in JSON format:
+        {{
+            "patient_control": <insert updated value>,
+            "patient_efficacy": <insert updated value>,
+            "patient_awareness": <insert updated value>,
+            "patient_reward": <insert updated value>
+        }}
         """
-        summary_data_frame.to_csv(filename, index=False)
+
+        response = self.llm.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": "You are a helpful assistant."},
+                      {"role": "user", "content": prompt}],
+            temperature=1,
+            max_tokens=256,
+            response_format={ "type": "json_object" }
+        )
+
+        response_text = response.choices[0].message.content
+
+        # Parse the JSON 
+        try:
+            updated_states = json.loads(response_text) 
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            print(f"Raw response text: {response_text}")
+            # Handle the error appropriately (e.g., exit, use default values)
+            return
+
+        # Update the cognitive model
+        self.patient_control = updated_states["patient_control"]
+        self.patient_efficacy = updated_states["patient_efficacy"]
+        self.patient_awareness = updated_states["patient_awareness"]
+        self.patient_reward = updated_states["patient_reward"]
+
+        return
+    
+    def generate_between_session_event(self):
+        # Construct conversation history string 
+        conversation_history_str = ""
+        for i in range(len(self.conversation_history_df)):
+            speaker = self.conversation_history_df.loc[i, "speaker"]
+            utterance = self.conversation_history_df.loc[i, "text_response"]
+            conversation_history_str += f"{speaker.upper()}: {utterance}\n" 
+
+        # Create the prompt for the LLM
+        prompt = f"""
+        Simulate a Between-Session Event for an Alcohol Addiction Patient
+
+        ## Patient Profile:
+        - **Age:** {self.age}
+        - **Gender:** {self.gender}
+        - **Occupation:** {self.occupation}
+        - **Ethnicity:** {self.ethnicity}
+        - **MBTI Personality Type:** {self.mbti}
+        - **Control Level ({self.patient_control}/10):** {self.patient_control}/10 represents their ability to regulate thoughts, emotions, and actions related to alcohol. 
+        - **Self-Efficacy Level ({self.patient_efficacy}/10):** {self.patient_efficacy}/10 indicates their confidence in resisting cravings and achieving sobriety.
+        - **Awareness Level ({self.patient_awareness}/10):** {self.patient_awareness}/10 reflects their understanding of their triggers and behaviors.
+        - **Reward Level ({self.patient_reward}/10):** {self.patient_reward}/10 shows how strongly alcohol and its cues trigger cravings. 
+
+        ## Previous Session Conversation:
+        {conversation_history_str}
+
+        ## Event Description:
+        Based on the patient's profile and the content of their last therapy session, describe a realistic and probable event that could have happened to the patient since then. 
+
+        Consider the following:
+        - Did they encounter triggers discussed in therapy? 
+        - Did they engage in drinking? If so, how much and under what circumstances?
+        - Did they use coping mechanisms discussed in therapy?
+        - Did they experience any positive or negative emotions related to their progress?
+        - Were there any social interactions that influenced their behavior?
+
+        **Example:**
+        The patient, feeling stressed about a deadline at work, considered having a drink to cope but ultimately decided to call a friend for support, as they had discussed in therapy.
+
+        **Output:** 
+        <Provide the between-session event description here.>
+        """
+
+        response = self.llm.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": "You are a helpful assistant."},
+                      {"role": "user", "content": prompt}],
+            temperature=1,  # Adjust temperature for event creativity
+            max_tokens=128  # Adjust for desired event description length
+        )
+
+        event_description = response.choices[0].message.content
+
+        # Append the event description to the between_session_event_df DataFrame
+        new_event_row = {
+            "user_id": self.user_id,
+            "persona_id": self.persona_id,
+            "session_id": self.session_id,
+            "event_description": event_description
+        }
+
+        new_event_row_df = pd.DataFrame([new_event_row])
+        self.between_session_event_df = pd.concat([self.between_session_event_df, new_event_row_df], ignore_index=True)
+
+        return    
+    
+    def save_conversation_history(self, user_input, response_text):
+        prev_response_text = None
+        if self.session_history:
+            prev_response_text = self.session_history[-1]
+            prev_response_text.get("content", None)
+        else:
+            prev_response_text = ""
+
+        # Update session history
+        self.session_history.append({"role": "user", "content": user_input})
+        self.session_history.append({"role": "agent", "content": response_text})
+
+        miti_behavior_encoding = self.generate_miti_behavior_codes(user_input, prev_response_text)
+
+        if miti_behavior_encoding:
+            miti_behavior_codes = miti_behavior_encoding["behavior_codes"]
+            miti_behavior_reasoning = miti_behavior_encoding["reasoning"]
+
+        # Append the conversation to the conversation_history DataFrame
+        new_user_row = {
+            "user_id": self.user_id,
+            "persona_id": self.persona_id,
+            "session_id": self.session_id,
+            "dialogue_turn": self.dialogue_turn,
+            "speaker": "user",
+            "text_response": user_input,
+            "patient_control": self.patient_control,
+            "patient_efficacy": self.patient_efficacy,
+            "patient_awareness": self.patient_awareness,
+            "patient_reward": self.patient_reward,
+            "miti_behavior_codes": miti_behavior_codes,
+            "miti_behavior_reasoning": miti_behavior_reasoning
+        }
+        self.dialogue_turn += 1  
+
+        self.update_persona_attribute(user_input, response_text)
+
+        new_simpatient_row = {
+            "user_id": self.user_id,
+            "persona_id": self.persona_id,
+            "session_id": self.session_id,
+            "dialogue_turn": self.dialogue_turn,
+            "speaker": "simpatient",
+            "text_response": response_text,
+            "patient_control": self.patient_control,
+            "patient_efficacy": self.patient_efficacy,
+            "patient_awareness": self.patient_awareness,
+            "patient_reward": self.patient_reward,
+            "miti_behavior_codes": [],
+            "miti_behavior_reasoning": ""
+        }
+
+        # Convert the row to a DataFrame
+        new_conversation_history_df = pd.DataFrame([new_user_row, new_simpatient_row])
+
+        # Append the example row to the persona_characteristics DataFrame
+        self.conversation_history_df = pd.concat([self.conversation_history_df, new_conversation_history_df], ignore_index=True)
+
+        self.dialogue_turn += 1
+        return self.conversation_history_df 
 
 if __name__ == "__main__":
-    patient = SimulatedPatient()
+    user_id="1"
+    persona_id="1"
+    session_id="1"
 
-    session_id = 1
-    count = 1
+    patient = SimulatedPatient(user_id, persona_id, session_id)
+
     while True:
-        user_input = input(f"Participant \n")
-        if user_input.lower() == 'quit':
+        user_input = input(f"Participant:\n")
+        if user_input.lower() == 'quit': # have a button when pressed to stop the session and create a summary
+            patient.generate_summary() 
+            break
+        if user_input.lower() == 'event': # have a button when pressed to stop the session, create a summary and generate a between session event
+            patient.generate_summary()
+            patient.generate_between_session_event() 
             break
         
-        metrics = patient._generate_temp_evaluation_metrics(user_input)
+        response = patient.generate_dialogue(user_input)
 
-        patient.add_data(session_id, count, "therapist", user_input, patient.implicit_biases, patient.executive_function, patient.metacognition, metrics["behavior_codes"], metrics["reasoning"])
-        
-        count += 1
-        response = patient._generate_natural_language_response(user_input)
-        patient._update_cognitive_model(response)
-        print(f"Simulated Patient \n {response}")
+        print("Patient:\n", response)
 
-        patient.add_data(session_id, count, "patient", response, patient.implicit_biases, patient.executive_function, patient.metacognition, ["None"], "None")
-        
-        count += 1
-
-    patient.save_full_data_frame()
-    patient._generate_session_summary(session_id)
-    patient.save_summary_data_frame()
+        patient.save_conversation_history(user_input, response)
+    
+    print("Conversation History:\n", patient.conversation_history_df)
+    print("Evaluation Summary:\n", patient.eval_summary_df)
+    print("Between Session Event:\n", patient.between_session_event_df)
+    print("Persona Characteristics:\n", patient.persona_characteristics_df)
